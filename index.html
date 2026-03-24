@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>九巴到站</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+HK:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d0f0e;
+    --bg2: #161918;
+    --bg3: #1e2220;
+    --amber: #f5a623;
+    --amber-dim: #a06a10;
+    --text: #e8e4dc;
+    --text-muted: #7a7872;
+    --text-dim: #3d3d39;
+    --green: #3ddc84;
+    --red: #ff5f5f;
+    --border: #252824;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans HK', sans-serif;
+    font-weight: 300;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  #app {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    max-width: 480px;
+    margin: 0 auto;
+    position: relative;
+  }
+
+  /* Header */
+  .header {
+    padding: 20px 24px 0;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .back-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px;
+    display: none;
+    align-items: center;
+    font-size: 20px;
+    transition: color 0.15s;
+  }
+  .back-btn:hover { color: var(--text); }
+  .back-btn.visible { display: flex; }
+
+  .brand {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    color: var(--amber);
+    text-transform: uppercase;
+    flex: 1;
+  }
+
+  .step-indicator {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+  }
+
+  /* Screen container */
+  .screens {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .screen {
+    position: absolute;
+    inset: 0;
+    padding: 0 24px 24px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    opacity: 0;
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s;
+    pointer-events: none;
+  }
+  .screen.active {
+    transform: translateX(0);
+    opacity: 1;
+    pointer-events: all;
+  }
+  .screen.exit-left {
+    transform: translateX(-40px);
+    opacity: 0;
+    pointer-events: none;
+  }
+  .screen.entry-right {
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Screen titles */
+  .screen-title {
+    font-size: 26px;
+    font-weight: 400;
+    line-height: 1.2;
+    margin: 24px 0 6px;
+    color: var(--text);
+  }
+  .screen-subtitle {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 28px;
+    line-height: 1.5;
+  }
+
+  /* Input */
+  .input-group {
+    position: relative;
+    margin-bottom: 12px;
+  }
+
+  .route-input {
+    width: 100%;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px 20px;
+    font-size: 32px;
+    font-family: 'DM Mono', monospace;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    outline: none;
+    transition: border-color 0.2s;
+    caret-color: var(--amber);
+  }
+  .route-input:focus { border-color: var(--amber-dim); }
+  .route-input::placeholder { color: var(--text-dim); }
+
+  /* Saved routes */
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .saved-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-bottom: 28px;
+  }
+
+  .saved-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    position: relative;
+  }
+  .saved-item:hover { background: var(--bg3); border-color: #2e3230; }
+
+  .saved-route-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--amber);
+    min-width: 48px;
+  }
+
+  .saved-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .saved-dest {
+    font-size: 13px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .saved-stop {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+  }
+
+  .saved-eta-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--green);
+    text-align: right;
+    min-width: 36px;
+  }
+  .saved-eta-badge.soon { color: var(--amber); }
+  .saved-eta-badge.imm { color: var(--red); animation: pulse 1s ease-in-out infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  .delete-btn {
+    background: none;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    padding: 4px;
+    font-size: 16px;
+    transition: color 0.15s;
+    flex-shrink: 0;
+  }
+  .delete-btn:hover { color: var(--red); }
+
+  /* Button */
+  .primary-btn {
+    width: 100%;
+    background: var(--amber);
+    color: #0d0f0e;
+    border: none;
+    border-radius: 12px;
+    padding: 17px;
+    font-size: 15px;
+    font-weight: 500;
+    font-family: 'Noto Sans HK', sans-serif;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.1s;
+    letter-spacing: 0.02em;
+  }
+  .primary-btn:hover { opacity: 0.9; }
+  .primary-btn:active { transform: scale(0.98); }
+  .primary-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Direction cards */
+  .dir-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dir-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .dir-card:hover { background: var(--bg3); border-color: #2e3230; }
+
+  .dir-arrow {
+    font-size: 20px;
+    color: var(--amber);
+    flex-shrink: 0;
+  }
+
+  .dir-info { flex: 1; min-width: 0; }
+  .dir-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-family: 'DM Mono', monospace;
+    margin-bottom: 4px;
+  }
+  .dir-dest {
+    font-size: 17px;
+    font-weight: 400;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Stop list */
+  .stop-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .stop-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .stop-item:hover { background: var(--bg3); border-color: #2e3230; }
+
+  .stop-seq {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    min-width: 20px;
+    text-align: right;
+  }
+
+  .stop-name { font-size: 14px; color: var(--text); flex: 1; }
+
+  /* ETA screen */
+  .eta-header {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  .eta-route-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 36px;
+    font-weight: 500;
+    color: var(--amber);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  .eta-stop-name { font-size: 16px; color: var(--text); margin-bottom: 4px; }
+  .eta-dest { font-size: 12px; color: var(--text-muted); }
+
+  .eta-times {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .eta-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+  }
+
+  .eta-num-badge {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .eta-time-big {
+    font-family: 'DM Mono', monospace;
+    font-size: 28px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .eta-time-big.green { color: var(--green); }
+  .eta-time-big.amber { color: var(--amber); animation: pulse 1s infinite; }
+  .eta-time-big.red   { color: var(--red);   animation: pulse 0.7s infinite; }
+
+  .eta-time-abs {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    text-align: right;
+  }
+
+  .eta-remark {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 2px;
+  }
+
+  .eta-empty {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 14px;
+    padding: 40px 0;
+  }
+
+  .save-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .save-btn {
+    flex: 1;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    font-size: 13px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Noto Sans HK', sans-serif;
+  }
+  .save-btn:hover { border-color: var(--amber-dim); color: var(--amber); }
+  .save-btn.saved { border-color: var(--amber-dim); color: var(--amber); }
+
+  .refresh-btn {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 16px;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .refresh-btn:hover { border-color: #2e3230; color: var(--text); }
+
+  /* Loading */
+  .loading {
+    text-align: center;
+    padding: 60px 0;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+  .spinner {
+    width: 24px; height: 24px;
+    border: 2px solid var(--bg3);
+    border-top-color: var(--amber);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    margin: 0 auto 12px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Last updated */
+  .last-updated {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    text-align: center;
+    margin-top: 8px;
+  }
+
+  .error-msg {
+    text-align: center;
+    color: var(--red);
+    font-size: 13px;
+    padding: 20px;
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <button class="back-btn" id="backBtn" onclick="goBack()">←</button>
+    <span class="brand">九巴 KMB ETA</span>
+    <span class="step-indicator" id="stepIndicator"></span>
+  </div>
+
+  <div class="screens">
+    <!-- Screen 1: Route input -->
+    <div class="screen active" id="s1">
+      <div class="screen-title">巴士號碼</div>
+      <p class="screen-subtitle">輸入九巴路線號碼</p>
+
+      <div class="input-group">
+        <input class="route-input" id="routeInput" type="text" placeholder="例: 74B" maxlength="6" autocomplete="off" autocapitalize="characters" oninput="this.value=this.value.toUpperCase()" onkeydown="if(event.key==='Enter')searchRoute()">
+      </div>
+      <button class="primary-btn" id="searchBtn" onclick="searchRoute()" style="margin-bottom:32px">搜尋路線</button>
+
+      <div id="savedSection" style="display:none">
+        <div class="section-label">已儲存路線</div>
+        <div class="saved-list" id="savedList"></div>
+      </div>
+    </div>
+
+    <!-- Screen 2: Direction -->
+    <div class="screen entry-right" id="s2">
+      <div class="screen-title">選擇方向</div>
+      <p class="screen-subtitle" id="s2Subtitle"></p>
+      <div class="dir-cards" id="dirCards"></div>
+    </div>
+
+    <!-- Screen 3: Stop -->
+    <div class="screen entry-right" id="s3">
+      <div class="screen-title">選擇車站</div>
+      <p class="screen-subtitle" id="s3Subtitle"></p>
+      <div class="stop-list" id="stopList"></div>
+    </div>
+
+    <!-- Screen 4: ETA -->
+    <div class="screen entry-right" id="s4">
+      <div class="eta-header">
+        <div class="eta-route-num" id="etaRouteNum"></div>
+        <div class="eta-stop-name" id="etaStopName"></div>
+        <div class="eta-dest" id="etaDest"></div>
+      </div>
+      <div class="save-row">
+        <button class="save-btn" id="saveBtn" onclick="toggleSave()">☆ 儲存此路線</button>
+        <button class="refresh-btn" onclick="loadETA()">↻</button>
+      </div>
+      <div class="eta-times" id="etaTimes"></div>
+      <div class="last-updated" id="lastUpdated"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'https://data.etabus.gov.hk/v1/transport/kmb';
+
+let state = {
+  route: '', direction: '', serviceType: '1',
+  stopId: '', stopName: '', destTc: '',
+  routeData: [], stopData: [], etaInterval: null
+};
+
+// ─── Navigation ───────────────────────────────────────
+let screenHistory = ['s1'];
+
+function showScreen(id) {
+  const prev = screenHistory[screenHistory.length - 1];
+  if (prev === id) return;
+  document.getElementById(prev).classList.remove('active');
+  document.getElementById(prev).classList.add('exit-left');
+  const next = document.getElementById(id);
+  next.classList.remove('entry-right', 'exit-left');
+  next.classList.add('active');
+  screenHistory.push(id);
+  updateHeader();
+  setTimeout(() => document.getElementById(prev).classList.remove('exit-left'), 300);
+}
+
+function goBack() {
+  if (screenHistory.length < 2) return;
+  const cur = screenHistory.pop();
+  const prev = screenHistory[screenHistory.length - 1];
+  const curEl = document.getElementById(cur);
+  curEl.classList.remove('active');
+  curEl.classList.add('entry-right');
+  document.getElementById(prev).classList.remove('exit-left');
+  document.getElementById(prev).classList.add('active');
+  updateHeader();
+  if (cur === 's4') { clearInterval(state.etaInterval); state.etaInterval = null; }
+}
+
+function updateHeader() {
+  const cur = screenHistory[screenHistory.length - 1];
+  const steps = { s1: '', s2: '1/3', s3: '2/3', s4: '3/3' };
+  document.getElementById('stepIndicator').textContent = steps[cur] || '';
+  const back = document.getElementById('backBtn');
+  screenHistory.length > 1 ? back.classList.add('visible') : back.classList.remove('visible');
+}
+
+// ─── Screen 1: Search ─────────────────────────────────
+async function searchRoute() {
+  const route = document.getElementById('routeInput').value.trim().toUpperCase();
+  if (!route) return;
+  document.getElementById('searchBtn').disabled = true;
+  document.getElementById('searchBtn').textContent = '搜尋中…';
+  try {
+    const r = await fetch(`${API}/route/${route}/outbound/1`);
+    if (!r.ok) throw new Error();
+    const d = await r.json();
+    if (!d.data) throw new Error();
+    state.route = route;
+    await loadDirections(route);
+    showScreen('s2');
+  } catch {
+    alert('找不到此路線，請確認號碼正確');
+  } finally {
+    document.getElementById('searchBtn').disabled = false;
+    document.getElementById('searchBtn').textContent = '搜尋路線';
+  }
+}
+
+// ─── Screen 2: Direction ──────────────────────────────
+async function loadDirections(route) {
+  const r = await fetch(`${API}/route`);
+  const d = await r.json();
+  state.routeData = (d.data || []).filter(x => x.route === route);
+  const el = document.getElementById('dirCards');
+  el.innerHTML = '';
+  document.getElementById('s2Subtitle').textContent = `路線 ${route}`;
+  const dirMap = { O: '去程', I: '回程' };
+  const arrowMap = { O: '→', I: '←' };
+  state.routeData.forEach(item => {
+    const card = document.createElement('div');
+    card.className = 'dir-card';
+    card.innerHTML = `
+      <div class="dir-arrow">${arrowMap[item.bound] || '→'}</div>
+      <div class="dir-info">
+        <div class="dir-label">${dirMap[item.bound] || item.bound}</div>
+        <div class="dir-dest">${item.dest_tc}</div>
+      </div>`;
+    card.onclick = () => selectDirection(item);
+    el.appendChild(card);
+  });
+}
+
+async function selectDirection(item) {
+  state.direction = item.bound === 'O' ? 'outbound' : 'inbound';
+  state.serviceType = item.service_type;
+  state.destTc = item.dest_tc;
+  document.getElementById('s3Subtitle').textContent = `${state.route} → ${item.dest_tc}`;
+  await loadStops();
+  showScreen('s3');
+}
+
+// ─── Screen 3: Stops ──────────────────────────────────
+async function loadStops() {
+  const el = document.getElementById('stopList');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div>載入車站…</div>';
+  try {
+    const rsRes = await fetch(`${API}/route-stop/${state.route}/${state.direction}/${state.serviceType}`);
+    const rs = await rsRes.json();
+    const routeStops = rs.data || [];
+    state.stopData = routeStops.map(item => ({ ...item, info: {} }));
+
+    // Render placeholders immediately so user sees something
+    el.innerHTML = '';
+    routeStops.forEach(item => {
+      const div = document.createElement('div');
+      div.className = 'stop-item';
+      div.id = 'si_' + item.stop;
+      div.innerHTML = '<span class="stop-seq">' + item.seq + '</span><span class="stop-name" style="color:var(--text-dim)">' + item.stop + '</span>';
+      el.appendChild(div);
+    });
+
+    // Fetch stop names in parallel batches of 8
+    const batchSize = 8;
+    for (let i = 0; i < routeStops.length; i += batchSize) {
+      const batch = routeStops.slice(i, i + batchSize);
+      await Promise.all(batch.map(item =>
+        fetch(API + '/stop/' + item.stop)
+          .then(r => r.json())
+          .then(d => {
+            const info = d.data || {};
+            const name = info.name_tc || item.stop;
+            const div = document.getElementById('si_' + item.stop);
+            if (div) {
+              const nameEl = div.querySelector('.stop-name');
+              nameEl.textContent = name;
+              nameEl.style.color = '';
+              div.onclick = () => selectStop(item.stop, name);
+            }
+            const si = state.stopData.find(s => s.stop === item.stop);
+            if (si) si.info = info;
+          })
+          .catch(() => {
+            const div = document.getElementById('si_' + item.stop);
+            if (div) {
+              div.querySelector('.stop-name').style.color = '';
+              div.onclick = () => selectStop(item.stop, item.stop);
+            }
+          })
+      ));
+    }
+  } catch {
+    el.innerHTML = '<div class="error-msg">無法載入車站資料</div>';
+  }
+}
+
+function selectStop(stopId, stopName) {
+  state.stopId = stopId;
+  state.stopName = stopName;
+  document.getElementById('etaRouteNum').textContent = state.route;
+  document.getElementById('etaStopName').textContent = stopName;
+  document.getElementById('etaDest').textContent = `往 ${state.destTc}`;
+  updateSaveBtn();
+  showScreen('s4');
+  loadETA();
+  if (state.etaInterval) clearInterval(state.etaInterval);
+  state.etaInterval = setInterval(loadETA, 30000);
+}
+
+// ─── Screen 4: ETA ────────────────────────────────────
+async function loadETA() {
+  const el = document.getElementById('etaTimes');
+  try {
+    const r = await fetch(`${API}/eta/${state.stopId}/${state.route}/${state.serviceType}`);
+    const d = await r.json();
+    const now = new Date();
+    const dir = state.direction === 'outbound' ? 'O' : 'I';
+    const rows = (d.data || []).filter(x => x.dir === dir);
+
+    document.getElementById('lastUpdated').textContent =
+      `更新於 ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}:${now.getSeconds().toString().padStart(2,'0')}`;
+
+    if (!rows.length) {
+      el.innerHTML = '<div class="eta-empty">暫無到站資料</div>';
+      return;
+    }
+
+    el.innerHTML = '';
+    rows.forEach((row, i) => {
+      const div = document.createElement('div');
+      div.className = 'eta-row';
+      let minStr = '–', cls = '', absStr = '';
+      if (row.eta) {
+        const eta = new Date(row.eta);
+        const diff = Math.round((eta - now) / 60000);
+        if (diff <= 0) { minStr = '即將'; cls = 'red'; }
+        else if (diff <= 3) { minStr = `${diff} 分鐘`; cls = 'amber'; }
+        else { minStr = `${diff} 分鐘`; cls = 'green'; }
+        absStr = `${eta.getHours().toString().padStart(2,'0')}:${eta.getMinutes().toString().padStart(2,'0')}`;
+      } else {
+        minStr = row.rmk_tc || '–';
+        cls = '';
+      }
+      div.innerHTML = `
+        <span class="eta-num-badge">${i+1}</span>
+        <div style="flex:1">
+          <div class="eta-time-big ${cls}">${minStr}</div>
+          ${row.rmk_tc && row.eta ? `<div class="eta-remark">${row.rmk_tc}</div>` : ''}
+        </div>
+        ${absStr ? `<div class="eta-time-abs">${absStr}</div>` : ''}`;
+      el.appendChild(div);
+    });
+  } catch {
+    el.innerHTML = '<div class="error-msg">無法取得到站資料</div>';
+  }
+}
+
+// ─── Saved routes ─────────────────────────────────────
+function getSaved() {
+  try { return JSON.parse(localStorage.getItem('kmb_saved') || '[]'); } catch { return []; }
+}
+function setSaved(arr) { localStorage.setItem('kmb_saved', JSON.stringify(arr)); }
+
+function isSaved() {
+  return getSaved().some(s => s.route === state.route && s.stopId === state.stopId && s.direction === state.direction);
+}
+
+function updateSaveBtn() {
+  const btn = document.getElementById('saveBtn');
+  if (isSaved()) { btn.textContent = '★ 已儲存'; btn.classList.add('saved'); }
+  else { btn.textContent = '☆ 儲存此路線'; btn.classList.remove('saved'); }
+}
+
+function toggleSave() {
+  let saved = getSaved();
+  if (isSaved()) {
+    saved = saved.filter(s => !(s.route === state.route && s.stopId === state.stopId && s.direction === state.direction));
+  } else {
+    saved.unshift({ route: state.route, direction: state.direction, serviceType: state.serviceType, stopId: state.stopId, stopName: state.stopName, destTc: state.destTc });
+    if (saved.length > 10) saved = saved.slice(0, 10);
+  }
+  setSaved(saved);
+  updateSaveBtn();
+  renderSaved();
+}
+
+function renderSaved() {
+  const saved = getSaved();
+  const section = document.getElementById('savedSection');
+  const list = document.getElementById('savedList');
+  if (!saved.length) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = '';
+  saved.forEach((item, idx) => {
+    const div = document.createElement('div');
+    div.className = 'saved-item';
+    div.innerHTML = `
+      <span class="saved-route-num">${item.route}</span>
+      <div class="saved-info">
+        <div class="saved-dest">往 ${item.destTc}</div>
+        <div class="saved-stop">${item.stopName}</div>
+      </div>
+      <div class="saved-eta-badge" id="badge_${idx}">–</div>
+      <button class="delete-btn" onclick="deleteSaved(${idx},event)">✕</button>`;
+    div.onclick = (e) => { if (e.target.classList.contains('delete-btn')) return; loadSaved(item); };
+    list.appendChild(div);
+    fetchSavedETA(item, idx);
+  });
+}
+
+async function fetchSavedETA(item, idx) {
+  try {
+    const r = await fetch(`${API}/eta/${item.stopId}/${item.route}/${item.serviceType}`);
+    const d = await r.json();
+    const dir = item.direction === 'outbound' ? 'O' : 'I';
+    const rows = (d.data || []).filter(x => x.dir === dir && x.eta);
+    const badge = document.getElementById(`badge_${idx}`);
+    if (!badge) return;
+    if (!rows.length) { badge.textContent = '–'; return; }
+    const diff = Math.round((new Date(rows[0].eta) - new Date()) / 60000);
+    if (diff <= 0) { badge.textContent = '即將'; badge.className = 'saved-eta-badge imm'; }
+    else if (diff <= 3) { badge.textContent = `${diff}m`; badge.className = 'saved-eta-badge soon'; }
+    else { badge.textContent = `${diff}m`; badge.className = 'saved-eta-badge'; }
+  } catch {}
+}
+
+function deleteSaved(idx, e) {
+  e.stopPropagation();
+  let saved = getSaved();
+  saved.splice(idx, 1);
+  setSaved(saved);
+  renderSaved();
+}
+
+async function loadSaved(item) {
+  state.route = item.route;
+  state.direction = item.direction;
+  state.serviceType = item.serviceType;
+  state.stopId = item.stopId;
+  state.stopName = item.stopName;
+  state.destTc = item.destTc;
+  document.getElementById('routeInput').value = item.route;
+  document.getElementById('etaRouteNum').textContent = item.route;
+  document.getElementById('etaStopName').textContent = item.stopName;
+  document.getElementById('etaDest').textContent = `往 ${item.destTc}`;
+  updateSaveBtn();
+  screenHistory = ['s1'];
+  ['s2','s3','s4'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('active','exit-left');
+    el.classList.add('entry-right');
+  });
+  document.getElementById('s1').classList.add('active');
+  showScreen('s4');
+  loadETA();
+  if (state.etaInterval) clearInterval(state.etaInterval);
+  state.etaInterval = setInterval(loadETA, 30000);
+}
+
+// ─── Init ─────────────────────────────────────────────
+renderSaved();
+</script>
+</body>
+</html>
